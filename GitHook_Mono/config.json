@@ -1,0 +1,10 @@
+﻿{
+	"#": "The path to mono. This can also simply be 'mono'.",
+	"mono-path": "/Library/Frameworks/Mono.framework/Versions/4.0.4/bin/mono",
+
+	"#": "The path to xbuild. This can also simply be 'xbuild'.",
+	"xbuild-path": "/Library/Frameworks/Mono.framework/Versions/4.0.4/bin/xbuild",
+
+	"#": "The web server binding address to listen for GitHub web hooks.",
+	"listen-address": "http://*:7447/"
+}
