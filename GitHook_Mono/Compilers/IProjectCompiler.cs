@@ -6,6 +6,7 @@ using GitHook_Mono.Data;
 using GitHook_Mono.GitHub;
 using System.Linq;
 using GitHook_Mono.Config.Build;
+using System.IO;
 
 namespace GitHook_Mono.Compilers
 {
@@ -23,6 +24,73 @@ namespace GitHook_Mono.Compilers
 			var msg = Message;
 			if (!String.IsNullOrEmpty (msg)) msg += "\n";
 			return $"{msg}Process failed with exit code {ExitCode}.";
+		}
+	}
+
+	public class BuildLogger : IDisposable
+	{
+		private string _path;
+		private StreamWriter _writer;
+		private bool _disposed;
+
+		public BuildLogger (string path)
+		{
+			_path = path;
+		}
+
+		private void CheckOpen ()
+		{
+			if (null == _writer)
+			{
+				var inf = new FileInfo (_path);
+				if (inf.Exists) inf.Delete ();
+
+				_writer = new StreamWriter (inf.OpenWrite ());
+
+				Console.WriteLine ($"Build logging to {_path}");
+			}
+		}
+
+		public void WriteLine (string line, params object[] args)
+		{
+			if (args != null && args.Length > 0) line = String.Format (line, args);
+
+			var log = DateTime.Now.ToString ("yyyy-MM-dd HH:mm:ss") + "> " + line;
+
+			CheckOpen ();
+
+			_writer.WriteLine (log);
+			Console.WriteLine (line);
+		}
+
+		public void Close ()
+		{
+			if (_writer != null) _writer.Flush ();
+			Dispose (true);
+			GC.SuppressFinalize (this);
+		}
+
+		protected virtual void Dispose (bool disposing)
+		{
+			if (_disposed) return;
+
+			if (disposing)
+			{
+				if (_path != null) _path = null;
+				if (_writer != null)
+				{
+					_writer.Dispose ();
+					_writer = null;
+				}
+			}
+
+			_disposed = true;
+		}
+
+		public void Dispose ()
+		{
+			Dispose (true);
+			GC.SuppressFinalize (this);
 		}
 	}
 
@@ -59,9 +127,10 @@ namespace GitHook_Mono.Compilers
 		{
 			#if !TESTING
 			return System.IO.Path.Combine (
-			Environment.CurrentDirectory, 
-			WorkingDirectory, 
-			$"{_repository.FullName}_{sha}_{_builds}");
+				Environment.CurrentDirectory, 
+				WorkingDirectory, 
+				$"{_repository.FullName}_{sha}_{_builds}"
+			);
 			#else
 			return System.IO.Path.Combine (
 				Environment.CurrentDirectory, 
@@ -114,9 +183,6 @@ namespace GitHook_Mono.Compilers
 					//Generate the clone directory
 					var cloneDirectory = GetProjectPath (sha);
 
-					//Load config
-					var config = MainClass.LoadConfig<BuildConfig> (System.IO.Path.Combine (cloneDirectory, BuildFile));
-
 					#if !DEBUG
 					using (var db = new RepoContext ())
 					{
@@ -133,53 +199,71 @@ namespace GitHook_Mono.Compilers
 						commit.Status = GitHook_Mono.Data.Models.CommitStatus.Processing;
 						db.SaveChanges ();
 					#endif
-						try
-						{
-							//Clone
-							Console.WriteLine ("Cloning...");
-							Clone (config, cloneDirectory, sha);
-							Console.WriteLine ("Clone Completed.");
+					try
+					{
+						var logPath = sha + ".log";
+						var logger = new BuildLogger (logPath);
 
-							//Now that we have a clone, we can attempt to load some config
-							if (config == null || String.IsNullOrEmpty (config.SolutionFile))
+						//Clone
+						logger.WriteLine ("Cloning...");
+						Clone (logger, cloneDirectory, sha);
+						logger.WriteLine ("Clone Completed.");
+
+						//Load config
+						var cfg = System.IO.Path.Combine (cloneDirectory, BuildFile);
+						var config = MainClass.LoadConfig<BuildConfig> (cfg);
+						if (null == config)
+						{
+							logger.WriteLine ($"Failed to load configuration file at: {cfg}");
+							return;
+						}
+//						Console.WriteLine ("Config: " + config.ToString ());
+
+						//Now that we have a clone, we can attempt to load some config
+						if (config == null || String.IsNullOrEmpty (config.SolutionFile))
+						{
+							var sln = System.IO.Directory.GetFiles (cloneDirectory, "*.sln");
+							if (sln != null && sln.Length > 0)
 							{
-								var sln = System.IO.Directory.GetFiles (cloneDirectory, "*.sln");
-								if (sln != null && sln.Length > 0)
+								if (sln.Length == 1)
 								{
-									if (sln.Length == 1)
-									{
-										if (config == null) config = new BuildConfig () {
+									if (config == null) config = new BuildConfig () {
 											SolutionFile = sln.First ()
 										};
-										else config.SolutionFile = sln.First ();
-									}
-									else
-									{
-										throw new CompilerException(1, $"Too many solution files detected, please specify one in your {BuildFile}");
-									}
+									else config.SolutionFile = sln.First ();
 								}
 								else
 								{
-									throw new CompilerException(1, $"No solution file specified in {BuildFile}");
+									throw new CompilerException (1, $"Too many solution files detected, please specify one in your {BuildFile}");
 								}
 							}
+							else
+							{
+								throw new CompilerException (1, $"No solution file specified in {BuildFile}");
+							}
+						}
 
-							//Start compilation
-							Console.WriteLine ("Compiling...");
-							Compile (config, cloneDirectory, sha);
-							Console.WriteLine ("Compiling Completed.");
+						//Start compilation
+						logger.WriteLine ("Compiling...");
+						Compile (logger, config, cloneDirectory, sha);
+						logger.WriteLine ("Compiling Completed.");
 
+						logger.Close ();
+						MainClass.Plugins.ForEachPlugin ((plugin) =>
+						{
+							plugin.LogClosed (this, logPath);
+						});
 						#if !DEBUG
 							commit.Status = GitHook_Mono.Data.Models.CommitStatus.Passed;
 						#endif
-						}
-						catch (CompilerException ex)
+					}
+					catch (CompilerException ex)
 					{
 						#if !DEBUG
 							commit.Status = GitHook_Mono.Data.Models.CommitStatus.Failed;
 						#endif
-							Console.WriteLine (ex.ToString ());
-						}
+						Console.WriteLine (ex.ToString ());
+					}
 					#if !DEBUG
 						db.Repositories.Single (x => x.Id == _repoId).Builds++;
 						_builds++;
@@ -190,14 +274,40 @@ namespace GitHook_Mono.Compilers
 			}
 		}
 
-		public void Run (string command, string args, string workingPath = WorkingDirectory)
+		public void Run (BuildLogger logger, string command, string args, string workingPath = WorkingDirectory)
 		{
-			Console.WriteLine ($"{command} {args}");
-			var pc = Process.Start (new ProcessStartInfo () {
-				FileName = command,
-				Arguments = args,
-				WorkingDirectory = workingPath
-			});
+			logger.WriteLine ($"{command} {args}");
+			var pc = new Process () {
+				StartInfo = new ProcessStartInfo () {
+					FileName = command,
+					Arguments = args,
+					WorkingDirectory = workingPath,
+					RedirectStandardError = true,
+					RedirectStandardOutput = true,
+					UseShellExecute = false
+				}
+			};
+
+			if (pc == null)
+			{
+				Console.WriteLine ("Failed to start process");
+				throw new CompilerException (1);
+			}
+
+			pc.ErrorDataReceived += (sender, e) =>
+			{
+				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
+			};
+
+			pc.OutputDataReceived += (sender, e) =>
+			{
+				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
+			};
+
+			pc.Start ();
+
+			pc.BeginErrorReadLine ();
+			pc.BeginOutputReadLine ();
 
 			pc.WaitForExit ();
 
@@ -207,7 +317,7 @@ namespace GitHook_Mono.Compilers
 			}
 		}
 
-		protected virtual void Clone (BuildConfig config, string cloneDirectory, string sha)
+		protected virtual void Clone (BuildLogger logger, string cloneDirectory, string sha)
 		{
 			//Touch the directory
 			if (!System.IO.Directory.Exists (WorkingDirectory))
@@ -219,17 +329,17 @@ namespace GitHook_Mono.Compilers
 				System.IO.Directory.Delete (cloneDirectory, true);
 
 			//Clone from github into the target directory
-			Run ("git", $"clone --depth=50 --branch=master {_repository.CloneUrl} {cloneDirectory}");
+			Run (logger, "git", $"clone --depth=50 --branch=master {_repository.CloneUrl} {cloneDirectory}");
 			#endif
 
 			//Checkout the target commit
-			Run ("git", $"checkout -qf {sha}", cloneDirectory);
+			Run (logger, "git", $"checkout -qf {sha}", cloneDirectory);
 
 			//Initialise sub modules
-			Run ("git", $"submodule init", cloneDirectory);
+			Run (logger, "git", $"submodule init", cloneDirectory);
 		}
 
-		protected abstract void Compile (BuildConfig config, string cloneDirectory, string sha);
+		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, string sha);
 	}
 }
 

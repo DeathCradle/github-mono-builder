@@ -26,6 +26,7 @@ namespace GitHook_Mono
 			{
 				return JsonConvert.DeserializeObject<T> (File.ReadAllText (filePath));
 			}
+			else Console.WriteLine ($"No config file at: {filePath}");
 
 			return null;
 		}

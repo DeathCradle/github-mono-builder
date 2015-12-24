@@ -13,22 +13,22 @@ namespace GitHook_Mono.Compilers
 			
 		}
 
-		protected override void Compile (BuildConfig config, string cloneDirectory, string sha)
+		protected override void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, string sha)
 		{
 			MainClass.Plugins.ForEachPlugin ((plugin) =>
 			{
-				plugin.BeforeCompile (this, config, cloneDirectory, sha);
+				plugin.BeforeCompile (this, logger, config, cloneDirectory, sha);
 			});
 
 			//Print info
-			Run (MonoPath, $"--version", cloneDirectory);
-			Run (XbuildPath, $"/version", cloneDirectory);
+			Run (logger, MonoPath, $"--version", cloneDirectory);
+			Run (logger, XbuildPath, $"/version", cloneDirectory);
 
 			//Post build commands - Default: restore packages
 			if (config == null || config.PreBuild == null || config.PreBuild.Length == 0)
 			{
 				Console.WriteLine ("No config pre-build commands");
-				Run ("nuget", $"restore \"{config.SolutionFile}\"", cloneDirectory);
+				Run (logger, "nuget", $"restore \"{config.SolutionFile}\"", cloneDirectory);
 			}
 			else
 			{
@@ -39,26 +39,23 @@ namespace GitHook_Mono.Compilers
 					var cmd = line.Substring (0, firstSpace);
 					var args = line.Remove (0, firstSpace + 1);
 
-					Run (cmd, args, cloneDirectory);
+					Run (logger, cmd, args, cloneDirectory);
 				}
 			}
-//			Run ("mono", ".nuget/NuGet.exe restore API/packages.config -PackagesDirectory packages/ -source \"https://api.nuget.org/v3/index.json;https://www.nuget.org/api/v2/curated-feeds/microsoftdotnet/\"", cloneDirectory);
-//			Run ("mono", ".nuget/NuGet.exe restore Patcher/packages.config -PackagesDirectory packages/ -source \"https://api.nuget.org/v3/index.json;https://www.nuget.org/api/v2/curated-feeds/microsoftdotnet/\"", cloneDirectory);
 
 			//Compile
 			if (String.IsNullOrEmpty (config.BuildArgs))
 			{
-//				Run (MonoPath + "bin/xbuild", "/p:Configuration=Server-Debug \"Open Terraria API.sln\"", cloneDirectory);
-				Run (XbuildPath, $"\"{config.SolutionFile}\"", cloneDirectory);
+				Run (logger, XbuildPath, $"\"{config.SolutionFile}\"", cloneDirectory);
 			}
 			else
 			{
-				Run (XbuildPath, config.BuildArgs, cloneDirectory);
+				Run (logger, XbuildPath, config.BuildArgs, cloneDirectory);
 			}
 
 			MainClass.Plugins.ForEachPlugin ((plugin) =>
 			{
-				plugin.AfterCompile (this, config, cloneDirectory, sha);
+				plugin.AfterCompile (this, logger, config, cloneDirectory, sha);
 			});
 		}
 	}

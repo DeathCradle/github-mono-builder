@@ -17,18 +17,29 @@ namespace GitHook_Mono.Plugin
 		/// <summary>
 		/// Called before any compilation steps are performed.
 		/// </summary>
+		/// <param name="compiler">Compiler being used.</param>
+		/// <param name="logger">The build log.</param>
 		/// <param name="config">Config.</param>
 		/// <param name="cloneDirectory">Clone directory.</param>
 		/// <param name="sha">Sha.</param>
-		public virtual void BeforeCompile(IProjectCompiler compiler, BuildConfig config, string cloneDirectory, string sha) { }
+		public virtual void BeforeCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, string sha) { }
 
 		/// <summary>
 		/// Called after the build process has successfully ran.
 		/// </summary>
+		/// <param name="compiler">Compiler being used.</param>
+		/// <param name="logger">The build log.</param>
 		/// <param name="config">Config.</param>
 		/// <param name="cloneDirectory">Clone directory.</param>
 		/// <param name="sha">Sha.</param>
-		public virtual void AfterCompile(IProjectCompiler compiler, BuildConfig config, string cloneDirectory, string sha) { }
+		public virtual void AfterCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, string sha) { }
+
+		/// <summary>
+		/// Called when the build log has been closed.
+		/// </summary>
+		/// <param name="compiler">Compiler being used.</param>
+		/// <param name="filePath">Path to the build log.</param>
+		public virtual void LogClosed(IProjectCompiler compiler, string filePath) { }
 	}
 }
 
