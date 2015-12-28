@@ -6,6 +6,13 @@ namespace GitHook_Mono.Config.Build
 	public class BuildConfig
 	{
 		/// <summary>
+		/// Gets or sets the name of the build.
+		/// </summary>
+		/// <value>The build name.</value>
+		[JsonProperty ("build-name")]
+		public string BuildName { get; set; }
+
+		/// <summary>
 		/// Gets or sets the solution file.
 		/// </summary>
 		/// <value>The solution file.</value>

@@ -211,7 +211,7 @@ namespace GitHook_Mono.Compilers
 
 						//Load config
 						var cfg = System.IO.Path.Combine (cloneDirectory, BuildFile);
-						var config = MainClass.LoadConfig<BuildConfig> (cfg);
+						var config = MainClass.LoadConfig<BuildConfig[]> (cfg);
 						if (null == config)
 						{
 							logger.WriteLine ($"Failed to load configuration file at: {cfg}");
@@ -219,34 +219,41 @@ namespace GitHook_Mono.Compilers
 						}
 //						Console.WriteLine ("Config: " + config.ToString ());
 
-						//Now that we have a clone, we can attempt to load some config
-						if (config == null || String.IsNullOrEmpty (config.SolutionFile))
+						foreach (var build in config)
 						{
-							var sln = System.IO.Directory.GetFiles (cloneDirectory, "*.sln");
-							if (sln != null && sln.Length > 0)
+							//For each build configuration we must ensure we are working with the freshest copy
+							Run (logger, "git", "reset --hard origin/master", cloneDirectory);
+
+							//Now that we have a clone, we can attempt to load some config
+							if (String.IsNullOrEmpty (build.SolutionFile))
 							{
-								if (sln.Length == 1)
+								var sln = System.IO.Directory.GetFiles (cloneDirectory, "*.sln");
+								if (sln != null && sln.Length > 0)
 								{
-									if (config == null) config = new BuildConfig () {
-											SolutionFile = sln.First ()
-										};
-									else config.SolutionFile = sln.First ();
+									if (sln.Length == 1)
+									{
+										/*if (config == null) build = new BuildConfig () {
+												SolutionFile = sln.First ()
+											};
+										else*/
+										build.SolutionFile = sln.First ();
+									}
+									else
+									{
+										throw new CompilerException (1, $"Too many solution files detected, please specify one in your {BuildFile}");
+									}
 								}
 								else
 								{
-									throw new CompilerException (1, $"Too many solution files detected, please specify one in your {BuildFile}");
+									throw new CompilerException (1, $"No solution file specified in {BuildFile}");
 								}
 							}
-							else
-							{
-								throw new CompilerException (1, $"No solution file specified in {BuildFile}");
-							}
-						}
 
-						//Start compilation
-						logger.WriteLine ("Compiling...");
-						Compile (logger, config, cloneDirectory, sha);
-						logger.WriteLine ("Compiling Completed.");
+							//Start compilation
+							logger.WriteLine ("Compiling...");
+							Compile (logger, build, cloneDirectory, sha);
+							logger.WriteLine ("Compiling Completed.");
+						}
 
 						logger.Close ();
 						MainClass.Plugins.ForEachPlugin ((plugin) =>
@@ -336,7 +343,7 @@ namespace GitHook_Mono.Compilers
 			Run (logger, "git", $"checkout -qf {sha}", cloneDirectory);
 
 			//Initialise sub modules
-			Run (logger, "git", $"submodule init", cloneDirectory);
+			Run (logger, "git", $"submodule init", cloneDirectory  );
 		}
 
 		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, string sha);
