@@ -211,7 +211,15 @@ namespace GitHook_Mono.Compilers
 
 						//Load config
 						var cfg = System.IO.Path.Combine (cloneDirectory, BuildFile);
-						var config = MainClass.LoadConfig<BuildConfig[]> (cfg);
+						BuildConfig[] config;
+						try
+						{
+							config = MainClass.LoadConfig<BuildConfig[]> (cfg);
+						}
+						catch
+						{
+							config = new BuildConfig[] { MainClass.LoadConfig<BuildConfig> (cfg) };
+						}
 						if (null == config)
 						{
 							logger.WriteLine ($"Failed to load configuration file at: {cfg}");
