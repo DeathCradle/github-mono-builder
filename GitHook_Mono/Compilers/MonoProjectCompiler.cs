@@ -1,5 +1,6 @@
 ﻿using System;
 using GitHook_Mono.Config.Build;
+using GitHook_Mono.GitHub;
 
 namespace GitHook_Mono.Compilers
 {
@@ -13,11 +14,11 @@ namespace GitHook_Mono.Compilers
 			
 		}
 
-		protected override void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, string sha)
+		protected override void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit)
 		{
 			MainClass.Plugins.ForEachPlugin ((plugin) =>
 			{
-				plugin.BeforeCompile (this, logger, config, cloneDirectory, sha);
+				plugin.BeforeCompile (this, logger, config, cloneDirectory, commit);
 			});
 
 			//Print info
@@ -55,7 +56,7 @@ namespace GitHook_Mono.Compilers
 
 			MainClass.Plugins.ForEachPlugin ((plugin) =>
 			{
-				plugin.AfterCompile (this, logger, config, cloneDirectory, sha);
+				plugin.AfterCompile (this, logger, config, cloneDirectory, commit);
 			});
 		}
 	}

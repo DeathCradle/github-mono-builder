@@ -42,7 +42,7 @@ namespace GitHook_Mono.API
 							Message = "Commit was missing SHA field"
 						});
 					}
-					compiler.SheduleCompile (commit.CommitId);
+					compiler.SheduleCompile (commit);
 				}
 			}
 

@@ -113,14 +113,14 @@ namespace GitHook_Mono.Compilers
 		/// The reason for this is if a push is received, followed be another the second push would not
 		/// trigger a build.
 		/// </summary>
-		private static System.Collections.Concurrent.ConcurrentQueue<String> _pending;
+		private static System.Collections.Concurrent.ConcurrentQueue<GitHub_Commit> _pending;
 
 		private System.Threading.Thread _processor;
 
 		public IProjectCompiler (GitHub_Repository repository)
 		{
 			_repository = repository;
-			_pending = new System.Collections.Concurrent.ConcurrentQueue<String> ();
+			_pending = new System.Collections.Concurrent.ConcurrentQueue<GitHub_Commit> ();
 		}
 
 		protected string GetProjectPath (string sha)
@@ -167,9 +167,9 @@ namespace GitHook_Mono.Compilers
 			if (!_processor.IsAlive) _processor.Start ();
 		}
 
-		public void SheduleCompile (string commitSHA)
+		public void SheduleCompile (GitHub_Commit commit)
 		{
-			_pending.Enqueue (commitSHA);
+			_pending.Enqueue (commit);
 			Start ();
 		}
 
@@ -177,11 +177,11 @@ namespace GitHook_Mono.Compilers
 		{
 			while (_pending.Count > 0)
 			{
-				string sha;
-				if (_pending.TryDequeue (out sha))
+				GitHub_Commit commit;
+				if (_pending.TryDequeue (out commit))
 				{
 					//Generate the clone directory
-					var cloneDirectory = GetProjectPath (sha);
+					var cloneDirectory = GetProjectPath (commit.CommitId);
 
 					#if !DEBUG
 					using (var db = new RepoContext ())
@@ -201,12 +201,12 @@ namespace GitHook_Mono.Compilers
 					#endif
 					try
 					{
-						var logPath = sha + ".log";
+						var logPath = commit.CommitId + ".log";
 						var logger = new BuildLogger (logPath);
 
 						//Clone
 						logger.WriteLine ("Cloning...");
-						Clone (logger, cloneDirectory, sha);
+						Clone (logger, cloneDirectory, commit);
 						logger.WriteLine ("Clone Completed.");
 
 						//Load config
@@ -259,7 +259,7 @@ namespace GitHook_Mono.Compilers
 
 							//Start compilation
 							logger.WriteLine ("Compiling...");
-							Compile (logger, build, cloneDirectory, sha);
+							Compile (logger, build, cloneDirectory, commit);
 							logger.WriteLine ("Compiling Completed.");
 						}
 
@@ -332,7 +332,7 @@ namespace GitHook_Mono.Compilers
 			}
 		}
 
-		protected virtual void Clone (BuildLogger logger, string cloneDirectory, string sha)
+		protected virtual void Clone (BuildLogger logger, string cloneDirectory, GitHub_Commit commit)
 		{
 			//Touch the directory
 			if (!System.IO.Directory.Exists (WorkingDirectory))
@@ -348,13 +348,13 @@ namespace GitHook_Mono.Compilers
 			#endif
 
 			//Checkout the target commit
-			Run (logger, "git", $"checkout -qf {sha}", cloneDirectory);
+			Run (logger, "git", $"checkout -qf {commit.CommitId}", cloneDirectory);
 
 			//Initialise sub modules
 			Run (logger, "git", $"submodule init", cloneDirectory  );
 		}
 
-		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, string sha);
+		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit);
 	}
 }
 

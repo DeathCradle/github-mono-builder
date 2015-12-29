@@ -1,6 +1,7 @@
 ﻿using System;
 using GitHook_Mono.Config.Build;
 using GitHook_Mono.Compilers;
+using GitHook_Mono.GitHub;
 
 namespace GitHook_Mono.Plugin
 {
@@ -21,8 +22,8 @@ namespace GitHook_Mono.Plugin
 		/// <param name="logger">The build log.</param>
 		/// <param name="config">Config.</param>
 		/// <param name="cloneDirectory">Clone directory.</param>
-		/// <param name="sha">Sha.</param>
-		public virtual void BeforeCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, string sha) { }
+		/// <param name="commit">Commit details.</param>
+		public virtual void BeforeCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit) { }
 
 		/// <summary>
 		/// Called after the build process has successfully ran.
@@ -31,8 +32,8 @@ namespace GitHook_Mono.Plugin
 		/// <param name="logger">The build log.</param>
 		/// <param name="config">Config.</param>
 		/// <param name="cloneDirectory">Clone directory.</param>
-		/// <param name="sha">Sha.</param>
-		public virtual void AfterCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, string sha) { }
+		/// <param name="commit">Commit details.</param>
+		public virtual void AfterCompile(IProjectCompiler compiler, BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit) { }
 
 		/// <summary>
 		/// Called when the build log has been closed.
