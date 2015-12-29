@@ -24,6 +24,9 @@ namespace GitHook_Mono.GitHub
 		[JsonProperty ("distinct")]
 		public bool Distinct { get; set; }
 
+		[JsonProperty ("timestamp")]
+		public string TimeStamp { get; set; }
+
 		public string CommitId
 		{
 			get {
