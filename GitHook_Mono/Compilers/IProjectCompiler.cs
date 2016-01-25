@@ -399,6 +399,7 @@ namespace GitHook_Mono.Compilers
 			const String SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"90\" height=\"20\"><linearGradient id=\"a\" x2=\"0\" y2=\"100%\"><stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/><stop offset=\"1\" stop-opacity=\".1\"/></linearGradient><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"{2}\"/><rect rx=\"3\" x=\"37\" width=\"53\" height=\"20\" fill=\"{3}\"/><path fill=\"{3}\" d=\"M37 0h4v20h-4z\"/><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"url(#a)\"/><g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,Verdana,Geneva,sans-serif\" font-size=\"11\"><text x=\"19.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{0}</text><text x=\"19.5\" y=\"14\">{0}</text><text x=\"62.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{1}</text><text x=\"62.5\" y=\"14\">{1}</text></g></svg>";
 
 			var content = String.Format (SVG, leftText, rightText, leftBg, rightBg);
+			if (File.Exists (path)) File.Delete (path);
 			File.WriteAllText (path, content);
 		}
 	}
