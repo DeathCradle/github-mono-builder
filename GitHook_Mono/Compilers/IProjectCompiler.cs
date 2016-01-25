@@ -200,6 +200,7 @@ namespace GitHook_Mono.Compilers
 						commit.Status = GitHook_Mono.Data.Models.CommitStatus.Processing;
 						db.SaveChanges ();
 					#endif
+					BuildConfig current = null;
 					try
 					{
 						var logPath = commit.CommitId + ".log";
@@ -230,6 +231,7 @@ namespace GitHook_Mono.Compilers
 
 						foreach (var build in config)
 						{
+							current = build;
 							//For each build configuration we must ensure we are working with the freshest copy
 							Run (logger, "git", "reset --hard origin/master", cloneDirectory);
 
@@ -265,7 +267,7 @@ namespace GitHook_Mono.Compilers
 
 							MainClass.Plugins.ForEachPlugin ((plugin) =>
 							{
-								plugin.OnPass (this, cloneDirectory, commit);
+								plugin.OnPass (this, cloneDirectory, commit, current);
 							});
 						}
 
@@ -287,7 +289,7 @@ namespace GitHook_Mono.Compilers
 
 						MainClass.Plugins.ForEachPlugin ((plugin) =>
 						{
-							plugin.OnFail (this, cloneDirectory, commit);
+							plugin.OnFail (this, cloneDirectory, commit, current);
 						});
 					}
 					#if !DEBUG
@@ -380,7 +382,7 @@ namespace GitHook_Mono.Compilers
 			Run (logger, "git", $"checkout -qf {commit.CommitId}", cloneDirectory);
 
 			//Initialise sub modules
-			Run (logger, "git", $"submodule init", cloneDirectory     );
+			Run (logger, "git", $"submodule init", cloneDirectory      );
 		}
 
 		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit);
