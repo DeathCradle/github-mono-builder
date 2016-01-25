@@ -387,11 +387,11 @@ namespace GitHook_Mono.Compilers
 
 		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit);
 
-		public virtual void WriteBuildStatus (string path, bool passed)
+		public virtual void WriteBuildStatus (string path, bool passed, string build)
 		{
 			var bgColour = passed ? "#4c1" : "#D94341";
 			var text = passed ? "passing" : "failing";
-			SaveSVG (path, rightText: text, rightBg: bgColour);
+			SaveSVG (path, rightText: text, rightBg: bgColour, leftText: build);
 		}
 
 		public void SaveSVG (string path, string leftText = "build", string rightText = "passing", string leftBg = "#555", string rightBg = "#4c1")
