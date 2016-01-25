@@ -41,6 +41,9 @@ namespace GitHook_Mono.Plugin
 		/// <param name="compiler">Compiler being used.</param>
 		/// <param name="filePath">Path to the build log.</param>
 		public virtual void LogClosed(IProjectCompiler compiler, string filePath) { }
+
+		public virtual void OnFail(IProjectCompiler compiler, string cloneDirectory, GitHub_Commit commit) { }
+		public virtual void OnPass(IProjectCompiler compiler, string cloneDirectory, GitHub_Commit commit) { }
 	}
 }
 

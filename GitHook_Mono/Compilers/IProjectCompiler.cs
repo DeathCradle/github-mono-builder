@@ -7,6 +7,7 @@ using GitHook_Mono.GitHub;
 using System.Linq;
 using GitHook_Mono.Config.Build;
 using System.IO;
+using System.Threading;
 
 namespace GitHook_Mono.Compilers
 {
@@ -261,6 +262,11 @@ namespace GitHook_Mono.Compilers
 							logger.WriteLine ("Compiling...");
 							Compile (logger, build, cloneDirectory, commit);
 							logger.WriteLine ("Compiling Completed.");
+
+							MainClass.Plugins.ForEachPlugin ((plugin) =>
+							{
+								plugin.OnPass (this, cloneDirectory, commit);
+							});
 						}
 
 						logger.Close ();
@@ -278,6 +284,11 @@ namespace GitHook_Mono.Compilers
 							commit.Status = GitHook_Mono.Data.Models.CommitStatus.Failed;
 						#endif
 						Console.WriteLine (ex.ToString ());
+
+						MainClass.Plugins.ForEachPlugin ((plugin) =>
+						{
+							plugin.OnFail (this, cloneDirectory, commit);
+						});
 					}
 					#if !DEBUG
 						db.Repositories.Single (x => x.Id == _repoId).Builds++;
@@ -309,6 +320,8 @@ namespace GitHook_Mono.Compilers
 				throw new CompilerException (1);
 			}
 
+			var ar = new AutoResetEvent (false);
+
 			pc.ErrorDataReceived += (sender, e) =>
 			{
 				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
@@ -319,12 +332,28 @@ namespace GitHook_Mono.Compilers
 				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
 			};
 
+			pc.Exited += (sender, e) =>
+			{
+				ar.Set ();
+			};
+
 			pc.Start ();
 
 			pc.BeginErrorReadLine ();
 			pc.BeginOutputReadLine ();
 
+			Console.WriteLine ("Waiting");
 			pc.WaitForExit ();
+//			var started = DateTime.Now;
+//			while (!pc.HasExited)
+//			{
+//				if ((DateTime.Now - started).TotalMinutes >= 5)
+//				{
+//					throw new CompilerException (1);
+//				}
+//				System.Threading.Thread.Sleep (1000);
+//			}
+			Console.WriteLine ("Done");
 
 			if (0 != pc.ExitCode)
 			{
@@ -351,10 +380,25 @@ namespace GitHook_Mono.Compilers
 			Run (logger, "git", $"checkout -qf {commit.CommitId}", cloneDirectory);
 
 			//Initialise sub modules
-			Run (logger, "git", $"submodule init", cloneDirectory  );
+			Run (logger, "git", $"submodule init", cloneDirectory     );
 		}
 
 		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit);
+
+		public virtual void WriteBuildStatus (string path, bool passed)
+		{
+			var bgColour = passed ? "#4c1" : "#D94341";
+			var text = passed ? "passing" : "failing";
+			SaveSVG (path, rightText: text, rightBg: bgColour);
+		}
+
+		public void SaveSVG (string path, string leftText = "build", string rightText = "passing", string leftBg = "#555", string rightBg = "#4c1")
+		{
+			const String SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"90\" height=\"20\"><linearGradient id=\"a\" x2=\"0\" y2=\"100%\"><stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/><stop offset=\"1\" stop-opacity=\".1\"/></linearGradient><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"{2}\"/><rect rx=\"3\" x=\"37\" width=\"53\" height=\"20\" fill=\"{3}\"/><path fill=\"{3}\" d=\"M37 0h4v20h-4z\"/><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"url(#a)\"/><g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,Verdana,Geneva,sans-serif\" font-size=\"11\"><text x=\"19.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{0}</text><text x=\"19.5\" y=\"14\">{0}</text><text x=\"62.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{1}</text><text x=\"62.5\" y=\"14\">{1}</text></g></svg>";
+
+			var content = String.Format (SVG, leftText, rightText, leftBg, rightBg);
+			File.WriteAllText (path, content);
+		}
 	}
 }
 

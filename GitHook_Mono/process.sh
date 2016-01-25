@@ -1,0 +1,1 @@
+﻿git clone --depth=50 --branch=master https://github.com/DeathCradle/Terraria-s-Dedicated-Server-Mod.git 
