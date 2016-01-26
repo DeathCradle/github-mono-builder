@@ -322,44 +322,48 @@ namespace GitHook_Mono.Compilers
 				throw new CompilerException (1);
 			}
 
-			var ar = new AutoResetEvent (false);
-
-			pc.ErrorDataReceived += (sender, e) =>
+			using (var ar = new AutoResetEvent (false))
+			using (var outputWaitHandle = new AutoResetEvent (false))
+			using (var errorWaitHandle = new AutoResetEvent (false))
 			{
-				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
-			};
+				pc.ErrorDataReceived += (sender, e) =>
+				{
+					if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
+					else if(e.Data == null) outputWaitHandle.Set ();
+				};
 
-			pc.OutputDataReceived += (sender, e) =>
-			{
-				if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
-			};
+				pc.OutputDataReceived += (sender, e) =>
+				{
+					if (!String.IsNullOrEmpty (e.Data)) logger.WriteLine (e.Data);
+					else if(e.Data == null) errorWaitHandle.Set ();
+				};
 
-			pc.Exited += (sender, e) =>
-			{
-				ar.Set ();
-			};
+				pc.Exited += (sender, e) =>
+				{
+					ar.Set ();
+				};
 
-			pc.Start ();
+				pc.Start ();
 
-			pc.BeginErrorReadLine ();
-			pc.BeginOutputReadLine ();
+				pc.BeginErrorReadLine ();
+				pc.BeginOutputReadLine ();
 
-			Console.WriteLine ("Waiting");
-			pc.WaitForExit ();
-//			var started = DateTime.Now;
-//			while (!pc.HasExited)
-//			{
-//				if ((DateTime.Now - started).TotalMinutes >= 5)
-//				{
-//					throw new CompilerException (1);
-//				}
-//				System.Threading.Thread.Sleep (1000);
-//			}
-			Console.WriteLine ("Done");
+				Console.WriteLine ("Waiting");
+				var timeout = 1000 * 60 * 5;
+				if (pc.WaitForExit (timeout) && outputWaitHandle.WaitOne (timeout) && errorWaitHandle.WaitOne (timeout))
+				{
+					Console.WriteLine ("Done");
 
-			if (0 != pc.ExitCode)
-			{
-				throw new CompilerException (pc.ExitCode);
+					if (0 != pc.ExitCode)
+					{
+						throw new CompilerException (pc.ExitCode);
+					}
+				}
+				else
+				{
+					Console.WriteLine ("Process timed out");
+					throw new CompilerException (1);
+				}
 			}
 		}
 
@@ -382,13 +386,14 @@ namespace GitHook_Mono.Compilers
 			Run (logger, "git", $"checkout -qf {commit.CommitId}", cloneDirectory);
 
 			//Initialise sub modules
-			Run (logger, "git", $"submodule init", cloneDirectory      );
+			Run (logger, "git", $"submodule init", cloneDirectory       );
 		}
 
 		protected abstract void Compile (BuildLogger logger, BuildConfig config, string cloneDirectory, GitHub_Commit commit);
 
 		public virtual void WriteBuildStatus (string path, bool passed, string build)
 		{
+			Console.WriteLine ($"SVG: {passed}");
 			var bgColour = passed ? "#4c1" : "#D94341";
 			var text = passed ? "passing" : "failing";
 			SaveSVG (path, rightText: text, rightBg: bgColour, leftText: build);
@@ -396,9 +401,28 @@ namespace GitHook_Mono.Compilers
 
 		public void SaveSVG (string path, string leftText = "build", string rightText = "passing", string leftBg = "#555", string rightBg = "#4c1")
 		{
-			const String SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"90\" height=\"20\"><linearGradient id=\"a\" x2=\"0\" y2=\"100%\"><stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/><stop offset=\"1\" stop-opacity=\".1\"/></linearGradient><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"{2}\"/><rect rx=\"3\" x=\"37\" width=\"53\" height=\"20\" fill=\"{3}\"/><path fill=\"{3}\" d=\"M37 0h4v20h-4z\"/><rect rx=\"3\" width=\"90\" height=\"20\" fill=\"url(#a)\"/><g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,Verdana,Geneva,sans-serif\" font-size=\"11\"><text x=\"19.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{0}</text><text x=\"19.5\" y=\"14\">{0}</text><text x=\"62.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{1}</text><text x=\"62.5\" y=\"14\">{1}</text></g></svg>";
+			const Int32 Width = 100;
+			const Int32 Height = 20;
+			const Int32 ColourWidth = 45;
+			const Int32 ColourX = Width - ColourWidth;
 
-			var content = String.Format (SVG, leftText, rightText, leftBg, rightBg);
+			const Double LeftX = (Width - ColourWidth) / 2.0;
+			const Double RightX = ColourX + (ColourWidth / 2.0);
+
+			var content = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{Width}\" height=\"{Height}\">" +
+				$"<linearGradient id=\"a\" x2=\"0\" y2=\"100%\">" +
+				$"<stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/>" + 
+				$"<stop offset=\"1\" stop-opacity=\".1\"/></linearGradient>" + 
+				$"<rect rx=\"3\" width=\"{Width}\" height=\"{Height}\" fill=\"{leftBg}\"/>" + 
+				$"<rect rx=\"3\" x=\"{ColourX}\" width=\"{ColourWidth}\" height=\"{Height}\" fill=\"{rightBg}\"/>" +
+				$"<rect rx=\"3\" width=\"{Width}\" height=\"{Height}\" fill=\"url(#a)\"/>" + 
+				$"<g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,Verdana,Geneva,sans-serif\" font-size=\"11\">" + 
+				$"<text x=\"{LeftX}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{leftText}</text>" +
+				$"<text x=\"{LeftX}\" y=\"14\">{leftText}</text>" + 
+				$"<text x=\"{RightX}\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{rightText}</text>" + 
+				$"<text x=\"{RightX}\" y=\"14\">{rightText}</text>" +
+				$"</g>" +
+				$"</svg>";
 			if (File.Exists (path)) File.Delete (path);
 			File.WriteAllText (path, content);
 		}
